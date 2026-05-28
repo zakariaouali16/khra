@@ -1,0 +1,288 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Router Console — Phase 5</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@400;600;800&family=IBM+Plex+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --bg:#0b0d11;
+    --panel:#12151c;
+    --panel-2:#161a23;
+    --line:#242a36;
+    --ink:#e7ecf3;
+    --muted:#7e8796;
+    --faint:#525c6b;
+    --accent:#3ecf8e;      /* default: routed ok */
+    --crit:#ff5b5b;
+    --warn:#f0a83a;
+    --clarify:#6f9cf2;
+    --route:#3ecf8e;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%}
+  body{
+    background:
+      radial-gradient(900px 500px at 80% -10%, rgba(62,207,142,.07), transparent 60%),
+      radial-gradient(700px 400px at 0% 110%, rgba(111,156,242,.06), transparent 55%),
+      var(--bg);
+    background-attachment:fixed;
+    color:var(--ink);
+    font-family:'Archivo',sans-serif;
+    -webkit-font-smoothing:antialiased;
+    line-height:1.5;
+  }
+  body::before{
+    content:"";position:fixed;inset:0;pointer-events:none;opacity:.4;
+    background-image:linear-gradient(rgba(255,255,255,.02) 1px,transparent 1px),
+                     linear-gradient(90deg,rgba(255,255,255,.02) 1px,transparent 1px);
+    background-size:46px 46px;
+  }
+  .wrap{max-width:880px;margin:0 auto;padding:40px 24px 80px;position:relative}
+
+  /* status bar */
+  .topbar{
+    display:flex;align-items:center;justify-content:space-between;
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);
+    border:1px solid var(--line);border-radius:10px;
+    padding:10px 14px;background:rgba(18,21,28,.6);
+    margin-bottom:34px;backdrop-filter:blur(4px);
+  }
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--faint);display:inline-block;margin-right:8px;vertical-align:middle}
+  .dot.live{background:var(--accent);box-shadow:0 0 0 0 rgba(62,207,142,.5);animation:pulse 2.4s infinite}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(62,207,142,.45)}70%{box-shadow:0 0 0 7px rgba(62,207,142,0)}100%{box-shadow:0 0 0 0 rgba(62,207,142,0)}}
+
+  h1{
+    font-weight:800;font-size:clamp(30px,5vw,46px);letter-spacing:-.02em;
+    margin:0 0 6px;line-height:1.04;
+  }
+  h1 .sub{display:block;font-family:'IBM Plex Mono',monospace;font-weight:500;
+    font-size:13px;letter-spacing:.18em;text-transform:uppercase;color:var(--accent);margin-bottom:14px}
+  .lede{color:var(--muted);max-width:60ch;margin:0 0 28px;font-size:15px}
+
+  .chips{display:flex;flex-wrap:wrap;gap:8px;margin-bottom:14px}
+  .chip{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted);
+    background:var(--panel);border:1px solid var(--line);border-radius:999px;
+    padding:6px 13px;cursor:pointer;transition:.15s;
+  }
+  .chip:hover{color:var(--ink);border-color:var(--accent);transform:translateY(-1px)}
+
+  .composer{
+    border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    overflow:hidden;box-shadow:0 22px 60px -30px rgba(0,0,0,.8);
+  }
+  textarea{
+    width:100%;min-height:120px;resize:vertical;border:0;outline:0;
+    background:transparent;color:var(--ink);
+    font-family:'IBM Plex Mono',monospace;font-size:14.5px;line-height:1.6;
+    padding:18px 18px 6px;
+  }
+  textarea::placeholder{color:var(--faint)}
+  .composer-bar{
+    display:flex;align-items:center;justify-content:space-between;
+    padding:10px 14px;border-top:1px solid var(--line);background:var(--panel-2);
+  }
+  .hint{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint)}
+  button.go{
+    font-family:'IBM Plex Mono',monospace;font-weight:600;font-size:13px;letter-spacing:.04em;
+    background:var(--accent);color:#06140d;border:0;border-radius:8px;
+    padding:10px 20px;cursor:pointer;transition:.15s;
+  }
+  button.go:hover{filter:brightness(1.08)}
+  button.go:disabled{opacity:.5;cursor:wait}
+
+  /* result */
+  .result{margin-top:26px;opacity:0;transform:translateY(8px);transition:.35s}
+  .result.show{opacity:1;transform:none}
+  .card{
+    --c:var(--route);
+    border:1px solid var(--line);border-left:4px solid var(--c);
+    border-radius:14px;background:var(--panel);overflow:hidden;
+  }
+  .card.crit{--c:var(--crit)} .card.warn{--c:var(--warn)}
+  .card.clarify{--c:var(--clarify)} .card.route{--c:var(--route)}
+
+  .card-head{padding:20px 22px;border-bottom:1px solid var(--line);
+    background:linear-gradient(180deg,rgba(255,255,255,.02),transparent)}
+  .kicker{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--c);margin-bottom:8px}
+  .label{font-size:clamp(22px,4vw,30px);font-weight:800;letter-spacing:-.01em;line-height:1.1}
+  .meta{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+  .tag{font-family:'IBM Plex Mono',monospace;font-size:11.5px;color:var(--muted);
+    border:1px solid var(--line);border-radius:6px;padding:4px 9px;background:var(--panel-2)}
+  .tag b{color:var(--ink);font-weight:600}
+
+  .card-body{padding:18px 22px;font-size:14.5px;color:#cdd4de}
+  .row-label{font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--faint);margin:0 0 4px}
+  .reason{margin:0 0 4px}
+
+  .alert{margin:16px 0 0;border:1px solid color-mix(in srgb,var(--warn) 40%,var(--line));
+    background:color-mix(in srgb,var(--warn) 9%,var(--panel));
+    border-radius:10px;padding:13px 15px}
+  .alert .row-label{color:var(--warn)}
+  .slots{font-family:'IBM Plex Mono',monospace;font-size:13px;color:#f3dcae}
+
+  .corrected{margin-top:14px;font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--muted)}
+  .corrected b{color:var(--clarify)}
+
+  details{margin-top:16px;font-family:'IBM Plex Mono',monospace;font-size:12px}
+  summary{cursor:pointer;color:var(--faint);outline:0}
+  summary:hover{color:var(--muted)}
+  pre{background:#0a0c10;border:1px solid var(--line);border-radius:8px;
+    padding:14px;overflow:auto;color:#9fb0c3;font-size:12px;margin-top:10px}
+
+  .err{border-left-color:var(--crit)!important}
+  .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(6,20,13,.35);
+    border-top-color:#06140d;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px}
+  @keyframes spin{to{transform:rotate(360deg)}}
+  footer{margin-top:40px;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);text-align:center}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <span><span class="dot" id="statusDot"></span><span id="statusText">connecting…</span></span>
+    <span id="modelText">model: —</span>
+  </div>
+
+  <h1><span class="sub">Reliable LLM Routing &amp; Triage</span>Router Console</h1>
+  <p class="lede">Enter an incoming request. The pipeline runs safety + academic overrides, a gate check, then routes to one taxonomy label — with a hallucination guard on the result.</p>
+
+  <div class="chips" id="chips"></div>
+
+  <div class="composer">
+    <textarea id="prompt" placeholder="e.g. My Python script throws an IndexError on line 12 even after I fixed the loop bounds…"></textarea>
+    <div class="composer-bar">
+      <span class="hint">⌘/Ctrl + Enter to route</span>
+      <button class="go" id="go">Route request</button>
+    </div>
+  </div>
+
+  <div class="result" id="result"></div>
+
+  <footer>Phase 5 · v5.3 · gating → education → healthcare</footer>
+</div>
+
+<script>
+  // If you host this page separately from the API, set this to the API origin
+  // e.g. "https://router-xxxx.run.app". Empty string = same origin.
+  const API_BASE = "";
+
+  const SEVERITY = {
+    "Urgent Escalation": "crit",
+    "Error": "crit",
+    "Clinical Advice Refusal": "warn",
+    "Human Staff Review Needed": "warn",
+    "Instructor/TA Escalation": "warn",
+    "Clarification Needed": "clarify",
+  };
+  const sev = l => SEVERITY[l] || "route";
+
+  const EXAMPLES = [
+    "I'm having crushing chest pain right now and my left arm is numb",
+    "I've had a rash on my arm for three days, is it serious?",
+    "Is my prescription ready?",
+    "The course-provided Docker container keeps crashing on startup",
+    "My Python script throws an IndexError after I changed the loop bounds — here's the traceback",
+  ];
+  const chips = document.getElementById('chips');
+  EXAMPLES.forEach(t => {
+    const c = document.createElement('button');
+    c.className = 'chip';
+    c.textContent = t.length > 46 ? t.slice(0, 44) + '…' : t;
+    c.title = t;
+    c.onclick = () => { document.getElementById('prompt').value = t; };
+    chips.appendChild(c);
+  });
+
+  const $ = id => document.getElementById(id);
+  const esc = s => String(s ?? '').replace(/[&<>]/g, m => ({'&':'&amp;','<':'&lt;','>':'&gt;'}[m]));
+
+  async function health(){
+    try{
+      const r = await fetch(API_BASE + '/health');
+      const d = await r.json();
+      $('statusDot').classList.add('live');
+      $('statusText').textContent = 'online · ' + d.label_count + ' labels';
+      $('modelText').textContent = 'model: ' + d.model;
+    }catch(e){
+      $('statusText').textContent = 'API unreachable';
+      $('modelText').textContent = 'model: —';
+    }
+  }
+  health();
+
+  async function route(){
+    const prompt = $('prompt').value.trim();
+    if(!prompt) return;
+    const btn = $('go');
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner"></span>Routing…';
+    const out = $('result');
+    out.classList.remove('show');
+
+    try{
+      const r = await fetch(API_BASE + '/route', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body:JSON.stringify({prompt})
+      });
+      if(!r.ok){
+        const e = await r.json().catch(()=>({detail:r.statusText}));
+        throw new Error(e.detail || ('HTTP ' + r.status));
+      }
+      render(await r.json());
+    }catch(err){
+      out.innerHTML = `<div class="card crit err"><div class="card-head">
+        <div class="kicker">Request failed</div>
+        <div class="label">Could not reach the router</div></div>
+        <div class="card-body"><p class="reason">${esc(err.message)}</p>
+        <p class="row-label" style="margin-top:12px">Check that Ollama is running and the model is pulled.</p></div></div>`;
+    }finally{
+      btn.disabled = false;
+      btn.textContent = 'Route request';
+      requestAnimationFrame(()=>out.classList.add('show'));
+    }
+  }
+
+  function render(d){
+    const label = d.predicted_label || '—';
+    const s = sev(label);
+    const slots = (d.missing_slots && d.missing_slots.length)
+      ? `<div class="alert"><p class="row-label">⚠ Action required — missing slots</p>
+         <div class="slots">${d.missing_slots.map(esc).join(' · ')}</div></div>` : '';
+    const corrected = d.was_corrected
+      ? `<div class="corrected">↻ hallucination guard corrected initial output <b>“${esc(d.initial_label)}”</b> → ${esc(label)}</div>` : '';
+    $('result').innerHTML = `
+      <div class="card ${s}">
+        <div class="card-head">
+          <div class="kicker">Routed to</div>
+          <div class="label">${esc(label)}</div>
+          <div class="meta">
+            <span class="tag">confidence <b>${esc(d.confidence_level || '—')}</b></span>
+            ${d.was_corrected ? '<span class="tag">guard <b>corrected</b></span>' : ''}
+          </div>
+        </div>
+        <div class="card-body">
+          <p class="row-label">Reasoning</p>
+          <p class="reason">${esc(d.short_reason || '—')}</p>
+          ${corrected}
+          ${slots}
+          <details><summary>raw response</summary><pre>${esc(JSON.stringify(d, null, 2))}</pre></details>
+        </div>
+      </div>`;
+  }
+
+  $('go').onclick = route;
+  $('prompt').addEventListener('keydown', e => {
+    if((e.metaKey || e.ctrlKey) && e.key === 'Enter') route();
+  });
+</script>
+</body>
+</html>

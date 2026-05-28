@@ -1,0 +1,105 @@
+{
+  "project": "Reliable LLM Agents for Routing and Triage",
+  "version": "5.3",
+  "domains": {
+    "gating_outcomes": {
+      "domain_description": "Non-routing outcomes that are evaluated before domain routing. These take priority over all domain labels.",
+      "labels": [
+        {
+          "name": "Urgent Escalation",
+          "definition": "The message contains signs of an ACTIVE, ONGOING medical emergency, acute physical distress, or serious psychiatric crisis \u2014 including suicidal ideation, self-harm, or expressions of immediate danger to physical safety such as chest pain RIGHT NOW, difficulty breathing RIGHT NOW, active bleeding, overdose in progress, or loss of consciousness. Always route here when these signals are present, even if the message is brief or ambiguous. This label takes absolute priority over all other labels. KEY TEST: Is this happening RIGHT NOW and requires immediate action? If yes, route here. If the person is describing a symptom they have been experiencing over days or weeks and asking what it means or what to do, that is Clinical Advice Refusal, not Urgent Escalation. Do NOT use for: questions about ongoing but non-immediate symptoms (\"I have had chest tightness after eating\", \"my vision has been blurry for a week\", \"I have had irregular heartbeats for a few days\", \"I have a lump that has been there two weeks\"), medication dosing questions (\"I accidentally took 800mg instead of 400mg, should I be worried?\"), or mental health treatment questions (\"is therapy alone enough for depression?\"). These are Clinical Advice Refusal. Do NOT use for interpersonal conflicts, harassment, or feeling socially unsafe \u2014 those belong in Instructor/TA Escalation.",
+          "required_slots": []
+        },
+        {
+          "name": "Clinical Advice Refusal",
+          "definition": "The request asks for medical diagnosis, clinical interpretation of symptoms or test results, treatment recommendations, or medication dosing advice. This must be refused before routing, regardless of how the request is framed. The key test: is the user asking for a clinical judgment or recommendation about their health? If yes, refuse. If the request is about money, logistics, documentation, or administrative processes that happen to mention medical terms, route to the appropriate healthcare label instead. Do NOT use this label for: billing or cost questions (even for medical procedures), pharmacy stock or prescription transfer requests, requests for referrals or doctor notes, discharge instruction clarification, or questions about test result paperwork. Examples that DO belong here: \"Do I have diabetes?\", \"Should I take lisinopril or amlodipine?\", \"What does my MRI result mean medically?\", \"Is my rash serious?\". Examples that do NOT belong here: \"How much will an MRI cost?\", \"Do you have generic Lexapro in stock?\", \"Can I get a referral to a specialist?\", \"I need a doctor note for work.\"",
+          "required_slots": []
+        },
+        {
+          "name": "Clarification Needed",
+          "definition": "The request does not contain enough information to confidently route to exactly one label. Use this when the intent is completely unclear, or when the intent is clear but a required referent is missing (e.g. which course, which patient, which appointment). Do not use this when the request clearly matches one label even if minor details are absent.",
+          "required_slots": []
+        }
+      ]
+    },
+    "education": {
+      "domain_description": "Computing/programming-related student support",
+      "labels": [
+        {
+          "name": "Concept Explanation",
+          "definition": "The student wants to understand how or why something works \u2014 a language feature, data structure, algorithm, or theoretical CS concept. The focus is on learning, not fixing. Route here when there is no broken code, no error message, and no exam or assignment framing driving the question. If the student is asking what something means in the context of an upcoming exam, route to Exam & Assessment Prep instead. If the concept is not named at all, the gate will handle this.",
+          "required_slots": []
+        },
+        {
+          "name": "Debugging & Code Troubleshooting",
+          "definition": "The student has written code that is not behaving as expected, and they need help finding or fixing the problem. The broken software must belong to the student \u2014 their own script, their own implementation, their own project. Do NOT use this label when the thing that is broken or not working was provided by the course \u2014 including IDEs, Docker containers, autograders, conda/virtual environments, pip/requirements.txt installs, Makefiles, GitHub Classroom repos, course VMs, or any tool or infrastructure the course set up. If the course provided it, route to Course Logistics & Environment Setup instead. A valid debugging request typically includes a code snippet, an error message, or a clear description of unexpected behavior in the student's own code. Vague complaints like 'my code is broken' without any of these the gate will handle.",
+          "required_slots": [
+            "code_reference_window_or_exact_error"
+          ]
+        },
+        {
+          "name": "Assignment & Grading Policy",
+          "definition": "The student wants to know what a rule or policy is \u2014 about assignment requirements, grading rubrics, late submissions, formatting, or what is or is not allowed. The key test: if the question can be answered by stating a policy, it belongs here. If it requires a human to look at the student's specific situation and make a decision, route to Instructor/TA Escalation instead. A student asking whether partial credit is possible in general is a policy question. A student saying their specific submission deserves partial credit and asking for a review is a human decision \u2014 that belongs in Instructor/TA Escalation.",
+          "required_slots": [
+            "student_id"
+          ]
+        },
+        {
+          "name": "Exam & Assessment Prep",
+          "definition": "The student is asking about the exam itself \u2014 its format, scope, permitted materials, what topics will be tested, how answers should be written, or where to find practice resources. Route here when the exam is the subject of the question, not just the reason behind it. A student saying 'explain BFS for my final exam' is asking about a concept, not about the exam \u2014 that goes to Concept Explanation. Route here for questions like 'will BFS be on the final?' or 'can I use a cheat sheet?' where the exam is what the student actually wants to know about.",
+          "required_slots": [
+            "class_id or class name"
+          ]
+        },
+        {
+          "name": "Course Logistics & Environment Setup",
+          "definition": "The student needs help with something the course provides or requires, but that is outside their own code. This covers: tool installation (JDK, Python, Docker, Node.js, WSL, VirtualBox, conda), course platform access (Canvas, Gradescope, GitHub Classroom), lecture schedules, office hours, submission procedures, finding course materials (syllabus, lecture recordings, assignment specs), and any software or infrastructure the course owns or set up. The key question is: is the broken or confusing thing something the student built, or something the course gave them? If the course gave it to them, route here \u2014 even if the message contains error language. For example, a course-provided Docker container crashing, a requirements.txt install failing, a conda environment not found, a GitHub Classroom repo asking for a password, or a course VM not running on Apple Silicon all belong here, not in Debugging & Code Troubleshooting.",
+          "required_slots": []
+        },
+        {
+          "name": "Instructor/TA Escalation",
+          "definition": "Use this label when the student's situation cannot be resolved by stating a policy \u2014 it requires a human to review their specific case and make a decision. This includes: grade disputes where the student is contesting a specific grade on their own submission, disability accommodations, academic dishonesty (reporting or being accused of plagiarism or cheating), any attempt to obtain answers to an active or ongoing exam or homework regardless of how the request is framed, harassment or interpersonal safety concerns (feeling unsafe due to another student's behavior, uncomfortable group dynamics, retaliation), scholarship or form sign-offs, and missing or contested grades. The key test: if answering requires someone to look at the student's record and act, it belongs here. Do not route harassment or interpersonal safety concerns to Urgent Escalation \u2014 those are human-review situations, not physical emergencies.",
+          "required_slots": []
+        }
+      ]
+    },
+    "healthcare": {
+      "domain_description": "Non-clinical, non-diagnostic patient support",
+      "labels": [
+        {
+          "name": "Scheduling & Appointments",
+          "definition": "Requests to book, cancel, reschedule, or check the status of an upcoming medical appointment.",
+          "required_slots": [
+            "account_number"
+          ]
+        },
+        {
+          "name": "Insurance & Billing",
+          "definition": "Inquiries regarding accepted insurance networks, payment methods, copays, out-of-pocket estimates, or explanations of medical bills.",
+          "required_slots": [
+            "account_number or invoice_number"
+          ]
+        },
+        {
+          "name": "Facility & General Information",
+          "definition": "Questions about clinic operating hours, physical location, parking availability, visitor policies, or general contact information.",
+          "required_slots": []
+        },
+        {
+          "name": "Pharmacy & Prescription Logistics",
+          "definition": "Administrative requests regarding prescription refill status, pharmacy hours, or how to transfer a prescription to a new location.",
+          "required_slots": [
+            "account_number"
+          ]
+        },
+        {
+          "name": "Human Staff Review Needed",
+          "definition": "The request is sensitive, legally complex, or privacy-related in a way that requires a human staff member to handle it directly. This includes medical records requests, patient grievances, HIPAA inquiries, staff complaints, proxy authorization, and documentation for legal purposes. Use this when the situation cannot be resolved by providing information alone. Standard appointment booking, prescription requests, and billing questions do not belong here.",
+          "required_slots": [
+            "account_number"
+          ]
+        }
+      ]
+    }
+  }
+}
