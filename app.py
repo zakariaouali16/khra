@@ -49,6 +49,10 @@ router.api_url = OLLAMA_URL
 
 class RouteRequest(BaseModel):
     prompt: str
+    safety_override: bool = True
+    academic_override: bool = True
+    gate_enabled: bool = True
+    hallucination_guard: bool = True
 
 
 @app.get("/")
@@ -76,6 +80,12 @@ def route(req: RouteRequest):
     if not prompt:
         raise HTTPException(status_code=400, detail="prompt is required")
     try:
-        return router.route_request(prompt)
+        return router.route_request(
+            prompt,
+            safety_override=req.safety_override,
+            academic_override=req.academic_override,
+            gate_enabled=req.gate_enabled,
+            hallucination_guard=req.hallucination_guard,
+        )
     except Exception as e:  # noqa: BLE001 - surface anything the router didn't catch
         raise HTTPException(status_code=502, detail=f"router failure: {e}")

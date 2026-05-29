@@ -299,54 +299,69 @@ USER REQUEST: "{user_prompt}"
             tqdm.write(f"Gate error for prompt '{user_prompt[:40]}...' -> {e}")
             return True  # fail open — let it through to the router
 
-    def route_request(self, user_prompt):
+    def route_request(self, user_prompt,
+                      safety_override=True,
+                      academic_override=True,
+                      gate_enabled=True,
+                      hallucination_guard=True):
         """
-        Four-step routing:
+        Four-step routing — each step can be disabled via its flag:
           Safety Override  — pre-gate keyword check for physical emergencies / psychiatric crises
           Academic Override — pre-gate keyword check for exam cheating / academic integrity
           Step A           — Gate: check if enough information is present
           Step B           — Route: pick a label, validate against taxonomy
         """
+        controls = {
+            "safety_override": safety_override,
+            "academic_override": academic_override,
+            "gate_enabled": gate_enabled,
+            "hallucination_guard": hallucination_guard,
+        }
 
         # ── PHYSICAL SAFETY OVERRIDE (pre-gate) ───────────────────────────────
-        safety_label = self._check_safety_override(user_prompt)
-        if safety_label:
-            return {
-                "initial_label": safety_label,
-                "predicted_label": safety_label,
-                "confidence_level": "High",
-                "missing_slots": [],
-                "short_reason": "Safety override: message contains an unambiguous physical emergency or psychiatric crisis signal.",
-                "was_corrected": False,
-                "qa_reason": "Pre-gate safety keyword match — bypassed gate and router."
-            }
+        if safety_override:
+            safety_label = self._check_safety_override(user_prompt)
+            if safety_label:
+                return {
+                    "initial_label": safety_label,
+                    "predicted_label": safety_label,
+                    "confidence_level": "High",
+                    "missing_slots": [],
+                    "short_reason": "Safety override: message contains an unambiguous physical emergency or psychiatric crisis signal.",
+                    "was_corrected": False,
+                    "qa_reason": "Pre-gate safety keyword match — bypassed gate and router.",
+                    "controls": controls,
+                }
 
         # ── ACADEMIC SAFETY OVERRIDE (pre-gate) ───────────────────────────────
-        academic_label = self._check_academic_override(user_prompt)
-        if academic_label:
-            return {
-                "initial_label": academic_label,
-                "predicted_label": academic_label,
-                "confidence_level": "High",
-                "missing_slots": [],
-                "short_reason": "Academic override: message contains an active exam cheating attempt or academic integrity violation signal.",
-                "was_corrected": False,
-                "qa_reason": "Pre-gate academic keyword match — bypassed gate and router."
-            }
+        if academic_override:
+            academic_label = self._check_academic_override(user_prompt)
+            if academic_label:
+                return {
+                    "initial_label": academic_label,
+                    "predicted_label": academic_label,
+                    "confidence_level": "High",
+                    "missing_slots": [],
+                    "short_reason": "Academic override: message contains an active exam cheating attempt or academic integrity violation signal.",
+                    "was_corrected": False,
+                    "qa_reason": "Pre-gate academic keyword match — bypassed gate and router.",
+                    "controls": controls,
+                }
 
         # ── STEP A: Gate ───────────────────────────────────────────────────────
-        has_enough_info = self.check_gate(user_prompt)
-
-        if not has_enough_info:
-            return {
-                "initial_label": "Clarification Needed",
-                "predicted_label": "Clarification Needed",
-                "confidence_level": "High",
-                "missing_slots": [],
-                "short_reason": "Request lacks sufficient information to pass the initial Gate.",
-                "was_corrected": False,
-                "qa_reason": "Blocked by gate."
-            }
+        if gate_enabled:
+            has_enough_info = self.check_gate(user_prompt)
+            if not has_enough_info:
+                return {
+                    "initial_label": "Clarification Needed",
+                    "predicted_label": "Clarification Needed",
+                    "confidence_level": "High",
+                    "missing_slots": [],
+                    "short_reason": "Request lacks sufficient information to pass the initial Gate.",
+                    "was_corrected": False,
+                    "qa_reason": "Blocked by gate.",
+                    "controls": controls,
+                }
 
         # ── STEP B: Route ──────────────────────────────────────────────────────
         system_prompt = self.build_system_prompt()
@@ -376,18 +391,24 @@ USER REQUEST: "{user_prompt}"
                 "missing_slots": [],
                 "short_reason": f"API Error: {str(e)}",
                 "was_corrected": False,
-                "qa_reason": "N/A"
+                "qa_reason": "N/A",
+                "controls": controls,
             }
 
         raw_label = initial_output.get("predicted_label", "")
         missing_slots = initial_output.get("missing_slots", [])
 
         # ── Hallucination guard ────────────────────────────────────────────────
-        validated_label, was_corrected = self._validate_label(raw_label)
-        qa_reason = (
-            f"Label '{raw_label}' not in taxonomy — corrected to '{validated_label}'."
-            if was_corrected else ""
-        )
+        if hallucination_guard:
+            validated_label, was_corrected = self._validate_label(raw_label)
+            qa_reason = (
+                f"Label '{raw_label}' not in taxonomy — corrected to '{validated_label}'."
+                if was_corrected else ""
+            )
+        else:
+            validated_label = raw_label
+            was_corrected = False
+            qa_reason = "Hallucination guard bypassed."
 
         return {
             "initial_label": raw_label,
@@ -396,7 +417,8 @@ USER REQUEST: "{user_prompt}"
             "missing_slots": missing_slots,
             "short_reason": initial_output.get("short_reason", ""),
             "was_corrected": was_corrected,
-            "qa_reason": qa_reason
+            "qa_reason": qa_reason,
+            "controls": controls,
         }
 
     def evaluate_benchmark(self, input_csv, output_csv):

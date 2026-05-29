@@ -136,6 +136,48 @@
   pre{background:#0a0c10;border:1px solid var(--line);border-radius:8px;
     padding:14px;overflow:auto;color:#9fb0c3;font-size:12px;margin-top:10px}
 
+  /* pipeline controls */
+  .controls-panel{
+    border:1px solid var(--line);border-radius:14px;background:var(--panel);
+    padding:16px 18px;margin-bottom:20px;
+  }
+  .controls-hdr{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;letter-spacing:.18em;
+    text-transform:uppercase;color:var(--faint);margin-bottom:12px;
+  }
+  .controls-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+  @media(max-width:540px){.controls-grid{grid-template-columns:1fr}}
+  .tgl-row{
+    display:flex;align-items:center;justify-content:space-between;gap:10px;
+    padding:10px 12px;border:1px solid var(--line);border-radius:10px;
+    background:var(--panel-2);cursor:pointer;transition:.15s;user-select:none;
+  }
+  .tgl-row:hover{border-color:color-mix(in srgb,var(--accent) 35%,var(--line))}
+  .tgl-row:has(input:not(:checked)){border-color:color-mix(in srgb,var(--crit) 25%,var(--line))}
+  .tgl-info{flex:1;min-width:0}
+  .tgl-name{display:block;font-weight:600;font-size:13px;color:var(--ink);margin-bottom:2px}
+  .tgl-desc{display:block;font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--faint);line-height:1.4}
+  .tgl-row:has(input:not(:checked)) .tgl-name{color:var(--muted)}
+  .tgl-switch{position:relative;width:38px;height:22px;flex-shrink:0}
+  .tgl-switch input{opacity:0;width:0;height:0;position:absolute}
+  .tgl-slider{position:absolute;inset:0;background:var(--faint);border-radius:999px;transition:.2s}
+  .tgl-slider::before{
+    content:'';position:absolute;width:16px;height:16px;left:3px;top:3px;
+    background:#fff;border-radius:50%;transition:.2s;
+  }
+  .tgl-switch input:checked + .tgl-slider{background:var(--accent)}
+  .tgl-switch input:checked + .tgl-slider::before{transform:translateX(16px)}
+  /* pipeline status in result */
+  .pipe-status{margin-top:14px;padding-top:14px;border-top:1px solid var(--line)}
+  .pipe-chips{display:flex;flex-wrap:wrap;gap:6px;margin-top:6px}
+  .pipe-chip{font-family:'IBM Plex Mono',monospace;font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid}
+  .pipe-chip.on{
+    color:var(--accent);
+    border-color:color-mix(in srgb,var(--accent) 40%,transparent);
+    background:color-mix(in srgb,var(--accent) 8%,transparent);
+  }
+  .pipe-chip.off{color:var(--faint);border-color:var(--line);background:transparent;text-decoration:line-through}
+
   .err{border-left-color:var(--crit)!important}
   .spinner{display:inline-block;width:13px;height:13px;border:2px solid rgba(6,20,13,.35);
     border-top-color:#06140d;border-radius:50%;animation:spin .7s linear infinite;vertical-align:-2px;margin-right:7px}
@@ -153,6 +195,40 @@
 
   <h1><span class="sub">Reliable LLM Routing &amp; Triage</span>Router Console</h1>
   <p class="lede">Enter an incoming request. The pipeline runs safety + academic overrides, a gate check, then routes to one taxonomy label — with a hallucination guard on the result.</p>
+
+  <div class="controls-panel">
+    <div class="controls-hdr">Pipeline Controls</div>
+    <div class="controls-grid">
+      <label class="tgl-row">
+        <span class="tgl-info">
+          <span class="tgl-name">Physical Safety Override</span>
+          <span class="tgl-desc">Keyword scan for physical emergencies &amp; psychiatric crises</span>
+        </span>
+        <span class="tgl-switch"><input type="checkbox" id="tgl-safety" checked><span class="tgl-slider"></span></span>
+      </label>
+      <label class="tgl-row">
+        <span class="tgl-info">
+          <span class="tgl-name">Academic Override</span>
+          <span class="tgl-desc">Keyword scan for exam cheating &amp; academic integrity</span>
+        </span>
+        <span class="tgl-switch"><input type="checkbox" id="tgl-academic" checked><span class="tgl-slider"></span></span>
+      </label>
+      <label class="tgl-row">
+        <span class="tgl-info">
+          <span class="tgl-name">Gating</span>
+          <span class="tgl-desc">LLM clarity check — blocks under-specified requests</span>
+        </span>
+        <span class="tgl-switch"><input type="checkbox" id="tgl-gate" checked><span class="tgl-slider"></span></span>
+      </label>
+      <label class="tgl-row">
+        <span class="tgl-info">
+          <span class="tgl-name">Hallucination Guard</span>
+          <span class="tgl-desc">Validates LLM output against taxonomy label set</span>
+        </span>
+        <span class="tgl-switch"><input type="checkbox" id="tgl-guard" checked><span class="tgl-slider"></span></span>
+      </label>
+    </div>
+  </div>
 
   <div class="chips" id="chips"></div>
 
@@ -227,17 +303,23 @@
     const out = $('result');
     out.classList.remove('show');
 
+    const controls = {
+      safety_override: $('tgl-safety').checked,
+      academic_override: $('tgl-academic').checked,
+      gate_enabled: $('tgl-gate').checked,
+      hallucination_guard: $('tgl-guard').checked,
+    };
     try{
       const r = await fetch(API_BASE + '/route', {
         method:'POST',
         headers:{'Content-Type':'application/json'},
-        body:JSON.stringify({prompt})
+        body:JSON.stringify({prompt, ...controls})
       });
       if(!r.ok){
         const e = await r.json().catch(()=>({detail:r.statusText}));
         throw new Error(e.detail || ('HTTP ' + r.status));
       }
-      render(await r.json());
+      render(await r.json(), controls);
     }catch(err){
       out.innerHTML = `<div class="card crit err"><div class="card-head">
         <div class="kicker">Request failed</div>
@@ -251,29 +333,43 @@
     }
   }
 
-  function render(d){
+  function render(d, controls){
+    controls = controls || {safety_override:true,academic_override:true,gate_enabled:true,hallucination_guard:true};
     const label = d.predicted_label || '—';
     const s = sev(label);
     const slots = (d.missing_slots && d.missing_slots.length)
-      ? `<div class="alert"><p class="row-label">⚠ Action required — missing slots</p>
-         <div class="slots">${d.missing_slots.map(esc).join(' · ')}</div></div>` : '';
+      ? `<div class=”alert”><p class=”row-label”>⚠ Action required — missing slots</p>
+         <div class=”slots”>${d.missing_slots.map(esc).join(' · ')}</div></div>` : '';
     const corrected = d.was_corrected
-      ? `<div class="corrected">↻ hallucination guard corrected initial output <b>“${esc(d.initial_label)}”</b> → ${esc(label)}</div>` : '';
+      ? `<div class=”corrected”>↻ hallucination guard corrected initial output <b>”${esc(d.initial_label)}”</b> → ${esc(label)}</div>` : '';
+    const pipeSteps = [
+      {key:'safety_override',   label:'Safety Override'},
+      {key:'academic_override', label:'Academic Override'},
+      {key:'gate_enabled',      label:'Gate'},
+      {key:'hallucination_guard', label:'Hallucination Guard'},
+    ];
+    const anyOff = pipeSteps.some(p => !controls[p.key]);
+    const pipeHtml = anyOff
+      ? `<div class=”pipe-status”><p class=”row-label”>Pipeline steps</p>
+         <div class=”pipe-chips”>${pipeSteps.map(p=>`<span class=”pipe-chip ${controls[p.key]?'on':'off'}”>${esc(p.label)}</span>`).join('')}</div></div>`
+      : '';
     $('result').innerHTML = `
-      <div class="card ${s}">
-        <div class="card-head">
-          <div class="kicker">Routed to</div>
-          <div class="label">${esc(label)}</div>
-          <div class="meta">
-            <span class="tag">confidence <b>${esc(d.confidence_level || '—')}</b></span>
-            ${d.was_corrected ? '<span class="tag">guard <b>corrected</b></span>' : ''}
+      <div class=”card ${s}”>
+        <div class=”card-head”>
+          <div class=”kicker”>Routed to</div>
+          <div class=”label”>${esc(label)}</div>
+          <div class=”meta”>
+            <span class=”tag”>confidence <b>${esc(d.confidence_level || '—')}</b></span>
+            ${d.was_corrected ? '<span class=”tag”>guard <b>corrected</b></span>' : ''}
+            ${anyOff ? '<span class=”tag” style=”color:var(--warn)”>pipeline <b>modified</b></span>' : ''}
           </div>
         </div>
-        <div class="card-body">
-          <p class="row-label">Reasoning</p>
-          <p class="reason">${esc(d.short_reason || '—')}</p>
+        <div class=”card-body”>
+          <p class=”row-label”>Reasoning</p>
+          <p class=”reason”>${esc(d.short_reason || '—')}</p>
           ${corrected}
           ${slots}
+          ${pipeHtml}
           <details><summary>raw response</summary><pre>${esc(JSON.stringify(d, null, 2))}</pre></details>
         </div>
       </div>`;
