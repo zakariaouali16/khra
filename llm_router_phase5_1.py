@@ -299,7 +299,10 @@ USER REQUEST: "{user_prompt}"
             tqdm.write(f"Gate error for prompt '{user_prompt[:40]}...' -> {e}")
             return True  # fail open — let it through to the router
 
-    def route_request(self, user_prompt, ablation=None):
+    def route_request(self, user_prompt, ablation=None,
+                      safety_override=True, academic_override=True,
+                      gate_enabled=True, hallucination_guard=True,
+                      no_all_gates=False):
         """
         Four-step routing:
           Safety Override  — pre-gate keyword check for physical emergencies / psychiatric crises
@@ -307,18 +310,46 @@ USER REQUEST: "{user_prompt}"
           Step A           — Gate: check if enough information is present
           Step B           — Route: pick a label, validate against taxonomy
 
-        ablation parameter (used by ablation experiments only; default None = full system):
-          None                     — full system, all components active
+        Can be called with individual boolean flags (from the API / website) or with
+        the ablation string (for benchmark experiments). Ablation strings are
+        translated to booleans and take precedence over defaults.
+
+        ablation strings (benchmark use only):
           "no_safety"              — skip safety keyword override
           "no_academic"            — skip academic keyword override
           "no_gate"                — skip clarification gate
-          "no_hallucination_guard" — skip hallucination guard (use raw LLM label as-is)
-          "no_all_gates"           — skip safety override, academic override, and clarification gate (keep hallucination guard)
+          "no_hallucination_guard" — skip hallucination guard
+          "no_all_gates"           — skip safety, academic & gate (keep hallucination guard)
           "no_all"                 — skip all four components (baseline LLM only)
         """
 
+        # Translate ablation string → individual booleans
+        if ablation == "no_safety":
+            safety_override = False
+        elif ablation == "no_academic":
+            academic_override = False
+        elif ablation == "no_gate":
+            gate_enabled = False
+        elif ablation == "no_hallucination_guard":
+            hallucination_guard = False
+        elif ablation == "no_all_gates":
+            safety_override = False
+            academic_override = False
+            gate_enabled = False
+        elif ablation == "no_all":
+            safety_override = False
+            academic_override = False
+            gate_enabled = False
+            hallucination_guard = False
+
+        # no_all_gates boolean flag (from website toggle)
+        if no_all_gates:
+            safety_override = False
+            academic_override = False
+            gate_enabled = False
+
         # ── PHYSICAL SAFETY OVERRIDE (pre-gate) ───────────────────────────────
-        if ablation not in ("no_safety", "no_all_gates", "no_all"):
+        if safety_override:
             safety_label = self._check_safety_override(user_prompt)
             if safety_label:
                 return {
@@ -332,7 +363,7 @@ USER REQUEST: "{user_prompt}"
                 }
 
         # ── ACADEMIC SAFETY OVERRIDE (pre-gate) ───────────────────────────────
-        if ablation not in ("no_academic", "no_all_gates", "no_all"):
+        if academic_override:
             academic_label = self._check_academic_override(user_prompt)
             if academic_label:
                 return {
@@ -346,7 +377,7 @@ USER REQUEST: "{user_prompt}"
                 }
 
         # ── STEP A: Gate ───────────────────────────────────────────────────────
-        if ablation not in ("no_gate", "no_all_gates", "no_all"):
+        if gate_enabled:
             has_enough_info = self.check_gate(user_prompt)
             if not has_enough_info:
                 return {
@@ -394,7 +425,7 @@ USER REQUEST: "{user_prompt}"
         missing_slots = initial_output.get("missing_slots", [])
 
         # ── Hallucination guard ────────────────────────────────────────────────
-        if ablation not in ("no_hallucination_guard", "no_all"):
+        if hallucination_guard:
             validated_label, was_corrected = self._validate_label(raw_label)
         else:
             validated_label, was_corrected = raw_label, False

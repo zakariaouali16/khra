@@ -53,6 +53,7 @@ class RouteRequest(BaseModel):
     academic_override: bool = True
     gate_enabled: bool = True
     hallucination_guard: bool = True
+    no_all_gates: bool = False
 
 
 @app.get("/")
@@ -86,6 +87,7 @@ def route(req: RouteRequest):
             academic_override=req.academic_override,
             gate_enabled=req.gate_enabled,
             hallucination_guard=req.hallucination_guard,
+            no_all_gates=req.no_all_gates,
         )
     except Exception as e:  # noqa: BLE001 - surface anything the router didn't catch
         raise HTTPException(status_code=502, detail=f"router failure: {e}")
