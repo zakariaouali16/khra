@@ -222,10 +222,10 @@
       </label>
       <label class="tgl-row">
         <span class="tgl-info">
-          <span class="tgl-name">Hallucination Guard</span>
-          <span class="tgl-desc">Validates LLM output against taxonomy label set</span>
+          <span class="tgl-name">No All Gates</span>
+          <span class="tgl-desc">Disables safety, academic &amp; gate checks simultaneously</span>
         </span>
-        <span class="tgl-switch"><input type="checkbox" id="tgl-guard" checked><span class="tgl-slider"></span></span>
+        <span class="tgl-switch"><input type="checkbox" id="tgl-noallgates"><span class="tgl-slider"></span></span>
       </label>
     </div>
   </div>
@@ -303,11 +303,13 @@
     const out = $('result');
     out.classList.remove('show');
 
+    const noAllGates = $('tgl-noallgates').checked;
     const controls = {
-      safety_override: $('tgl-safety').checked,
-      academic_override: $('tgl-academic').checked,
-      gate_enabled: $('tgl-gate').checked,
-      hallucination_guard: $('tgl-guard').checked,
+      safety_override:     noAllGates ? false : $('tgl-safety').checked,
+      academic_override:   noAllGates ? false : $('tgl-academic').checked,
+      gate_enabled:        noAllGates ? false : $('tgl-gate').checked,
+      hallucination_guard: true,
+      no_all_gates:        noAllGates,
     };
     try{
       const r = await fetch(API_BASE + '/route', {
@@ -346,8 +348,9 @@
       {key:'safety_override',   label:'Safety Override'},
       {key:'academic_override', label:'Academic Override'},
       {key:'gate_enabled',      label:'Gate'},
-      {key:'hallucination_guard', label:'Hallucination Guard'},
+      {key:'hallucination_guard', label:'Hallucination Guard'},  // always on
     ];
+    if (controls.no_all_gates) controls.hallucination_guard = true;
     const anyOff = pipeSteps.some(p => !controls[p.key]);
     const pipeHtml = anyOff
       ? `<div class=”pipe-status”><p class=”row-label”>Pipeline steps</p>
@@ -374,6 +377,15 @@
         </div>
       </div>`;
   }
+
+  $('tgl-noallgates').addEventListener('change', function(){
+    const off = this.checked;
+    ['tgl-safety','tgl-academic','tgl-gate'].forEach(id => {
+      const row = $(id).closest('label');
+      row.style.opacity = off ? '0.35' : '';
+      row.style.pointerEvents = off ? 'none' : '';
+    });
+  });
 
   $('go').onclick = route;
   $('prompt').addEventListener('keydown', e => {
