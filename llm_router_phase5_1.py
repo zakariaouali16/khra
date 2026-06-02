@@ -100,7 +100,7 @@ class LLMRouterV2:
         "integrity violation",
     ]
 
-    def __init__(self, model_name='llama3', taxonomy_path='../../Data/taxonomy_phase5.json'):
+    def __init__(self, model_name='Gemma4', taxonomy_path='../../Data/taxonomy_phase5.json'):
         self.model_name = model_name
         self.api_url = "http://localhost:11434/api/generate"
 
@@ -299,27 +299,26 @@ USER REQUEST: "{user_prompt}"
             tqdm.write(f"Gate error for prompt '{user_prompt[:40]}...' -> {e}")
             return True  # fail open — let it through to the router
 
-    def route_request(self, user_prompt,
-                      safety_override=True,
-                      academic_override=True,
-                      gate_enabled=True,
-                      hallucination_guard=True):
+    def route_request(self, user_prompt, ablation=None):
         """
-        Four-step routing — each step can be disabled via its flag:
+        Four-step routing:
           Safety Override  — pre-gate keyword check for physical emergencies / psychiatric crises
           Academic Override — pre-gate keyword check for exam cheating / academic integrity
           Step A           — Gate: check if enough information is present
           Step B           — Route: pick a label, validate against taxonomy
+
+        ablation parameter (used by ablation experiments only; default None = full system):
+          None                     — full system, all components active
+          "no_safety"              — skip safety keyword override
+          "no_academic"            — skip academic keyword override
+          "no_gate"                — skip clarification gate
+          "no_hallucination_guard" — skip hallucination guard (use raw LLM label as-is)
+          "no_all_gates"           — skip safety override, academic override, and clarification gate (keep hallucination guard)
+          "no_all"                 — skip all four components (baseline LLM only)
         """
-        controls = {
-            "safety_override": safety_override,
-            "academic_override": academic_override,
-            "gate_enabled": gate_enabled,
-            "hallucination_guard": hallucination_guard,
-        }
 
         # ── PHYSICAL SAFETY OVERRIDE (pre-gate) ───────────────────────────────
-        if safety_override:
+        if ablation not in ("no_safety", "no_all_gates", "no_all"):
             safety_label = self._check_safety_override(user_prompt)
             if safety_label:
                 return {
@@ -329,12 +328,11 @@ USER REQUEST: "{user_prompt}"
                     "missing_slots": [],
                     "short_reason": "Safety override: message contains an unambiguous physical emergency or psychiatric crisis signal.",
                     "was_corrected": False,
-                    "qa_reason": "Pre-gate safety keyword match — bypassed gate and router.",
-                    "controls": controls,
+                    "qa_reason": "Pre-gate safety keyword match — bypassed gate and router."
                 }
 
         # ── ACADEMIC SAFETY OVERRIDE (pre-gate) ───────────────────────────────
-        if academic_override:
+        if ablation not in ("no_academic", "no_all_gates", "no_all"):
             academic_label = self._check_academic_override(user_prompt)
             if academic_label:
                 return {
@@ -344,12 +342,11 @@ USER REQUEST: "{user_prompt}"
                     "missing_slots": [],
                     "short_reason": "Academic override: message contains an active exam cheating attempt or academic integrity violation signal.",
                     "was_corrected": False,
-                    "qa_reason": "Pre-gate academic keyword match — bypassed gate and router.",
-                    "controls": controls,
+                    "qa_reason": "Pre-gate academic keyword match — bypassed gate and router."
                 }
 
         # ── STEP A: Gate ───────────────────────────────────────────────────────
-        if gate_enabled:
+        if ablation not in ("no_gate", "no_all_gates", "no_all"):
             has_enough_info = self.check_gate(user_prompt)
             if not has_enough_info:
                 return {
@@ -359,8 +356,7 @@ USER REQUEST: "{user_prompt}"
                     "missing_slots": [],
                     "short_reason": "Request lacks sufficient information to pass the initial Gate.",
                     "was_corrected": False,
-                    "qa_reason": "Blocked by gate.",
-                    "controls": controls,
+                    "qa_reason": "Blocked by gate."
                 }
 
         # ── STEP B: Route ──────────────────────────────────────────────────────
@@ -391,24 +387,22 @@ USER REQUEST: "{user_prompt}"
                 "missing_slots": [],
                 "short_reason": f"API Error: {str(e)}",
                 "was_corrected": False,
-                "qa_reason": "N/A",
-                "controls": controls,
+                "qa_reason": "N/A"
             }
 
         raw_label = initial_output.get("predicted_label", "")
         missing_slots = initial_output.get("missing_slots", [])
 
         # ── Hallucination guard ────────────────────────────────────────────────
-        if hallucination_guard:
+        if ablation not in ("no_hallucination_guard", "no_all"):
             validated_label, was_corrected = self._validate_label(raw_label)
-            qa_reason = (
-                f"Label '{raw_label}' not in taxonomy — corrected to '{validated_label}'."
-                if was_corrected else ""
-            )
         else:
-            validated_label = raw_label
-            was_corrected = False
-            qa_reason = "Hallucination guard bypassed."
+            validated_label, was_corrected = raw_label, False
+
+        qa_reason = (
+            f"Label '{raw_label}' not in taxonomy — corrected to '{validated_label}'."
+            if was_corrected else ""
+        )
 
         return {
             "initial_label": raw_label,
@@ -417,8 +411,7 @@ USER REQUEST: "{user_prompt}"
             "missing_slots": missing_slots,
             "short_reason": initial_output.get("short_reason", ""),
             "was_corrected": was_corrected,
-            "qa_reason": qa_reason,
-            "controls": controls,
+            "qa_reason": qa_reason
         }
 
     def evaluate_benchmark(self, input_csv, output_csv):
