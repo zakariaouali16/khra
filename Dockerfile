@@ -1,4 +1,4 @@
-# Single container: Ollama runtime + llama3 (baked in) + the FastAPI router.
+# Single container: Ollama runtime + gemma4 (baked in) + the FastAPI router.
 # Baking the model into the image means Cloud Run cold starts load weights from
 # the local disk instead of re-downloading ~4.7 GB every time an instance spins up.
 FROM ollama/ollama:latest
@@ -26,7 +26,7 @@ COPY llm_router_phase5_1.py taxonomy_phase5.json app.py index.html start.sh ./
 RUN chmod +x start.sh
 
 ENV OLLAMA_URL=http://localhost:11434/api/generate \
-    MODEL_NAME=llama3 \
+    MODEL_NAME=gemma4 \
     TAXONOMY_PATH=/app/taxonomy_phase5.json \
     PORT=8080
 
