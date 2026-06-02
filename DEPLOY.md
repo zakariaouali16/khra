@@ -1,7 +1,7 @@
 # Deploying the Phase 5 Router to GCP
 
 Your router calls Ollama and makes **two LLM calls per request** (gate + route).
-So "host on GCP with llama3" really means: run **Ollama + llama3 on a GPU**,
+So "host on GCP with gemma4" really means: run **Ollama + gemma4 on a GPU**,
 wrap the router in the included `app.py`, and serve `index.html` to query it.
 
 Put these files in one folder before you build:
@@ -15,7 +15,7 @@ Run it locally first to confirm everything works:
 
 ```bash
 ollama serve &            # in one terminal
-ollama pull llama3
+ollama pull gemma4
 pip install -r requirements.txt
 uvicorn app:app --host 0.0.0.0 --port 8080
 # open http://localhost:8080
@@ -25,7 +25,7 @@ uvicorn app:app --host 0.0.0.0 --port 8080
 
 ## Pick a hosting path
 
-llama3 (8B) needs a GPU to feel interactive. The NVIDIA **L4** (24 GB) is the
+gemma4 (8B) needs a GPU to feel interactive. The NVIDIA **L4** (24 GB) is the
 right-sized, cheapest data-center GPU for an 8B model and is what GCP offers on
 both Cloud Run and G2 VMs. The decision is really about traffic pattern:
 
@@ -51,7 +51,7 @@ gcloud services enable run.googleapis.com artifactregistry.googleapis.com cloudb
 gcloud artifacts repositories create router-repo \
   --repository-format=docker --location=us-central1
 
-# Build the image (bakes llama3 in → large, slow build → raise the build timeout).
+# Build the image (bakes gemma4 in → large, slow build → raise the build timeout).
 gcloud builds submit \
   --tag us-central1-docker.pkg.dev/YOUR_PROJECT_ID/router-repo/router:latest \
   --timeout=1800s
@@ -110,7 +110,7 @@ Then SSH in and set it up:
 ```bash
 # Install NVIDIA driver (Ubuntu): follow GCP's GPU driver install, then:
 curl -fsSL https://ollama.com/install.sh | sh
-ollama pull llama3
+ollama pull gemma4
 
 # Copy your files up (gcloud compute scp ...), then:
 pip install -r requirements.txt
@@ -142,7 +142,7 @@ external API.
   or a rate limit — the endpoint runs an LLM, so it's abusable.
 - **Add a request timeout.** The router's `requests.post(...)` has no timeout; a
   stuck Ollama call will hang the worker. Add `timeout=30` to both calls.
-- **Latency expectation.** Two sequential llama3 calls on an L4 land around
+- **Latency expectation.** Two sequential gemma4 calls on an L4 land around
   2–5s per request. The page shows a spinner; that's why.
-- **Pin the model.** `llama3` in Ollama tracks 8B; pin a digest/tag if you need
+- **Pin the model.** `gemma4` in Ollama tracks 8B; pin a digest/tag if you need
   reproducibility across rebuilds.
