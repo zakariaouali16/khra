@@ -17,7 +17,7 @@ RUN pip3 install --no-cache-dir --break-system-packages -r requirements.txt
 # (Start the server briefly, pull, then stop it within the same layer.)
 RUN ollama serve & \
     until curl -sf http://localhost:11434/api/tags >/dev/null 2>&1; do sleep 1; done && \
-    ollama pull llama3 && \
+    ollama pull gemma4 && \
     pkill -f "ollama serve"
 
 # App files. These must sit in the build context alongside this Dockerfile:

@@ -10,7 +10,7 @@ Run locally:
 
 Environment variables:
     OLLAMA_URL    default http://localhost:11434/api/generate
-    MODEL_NAME    default llama3
+    MODEL_NAME    default gemma4
     TAXONOMY_PATH default ./taxonomy_phase5.json (next to this file)
 """
 
@@ -28,7 +28,7 @@ BASE_DIR = Path(__file__).resolve().parent
 
 TAXONOMY_PATH = os.environ.get("TAXONOMY_PATH", str(BASE_DIR / "taxonomy_phase5.json"))
 OLLAMA_URL = os.environ.get("OLLAMA_URL", "http://localhost:11434/api/generate")
-MODEL_NAME = os.environ.get("MODEL_NAME", "llama3")
+MODEL_NAME = os.environ.get("MODEL_NAME", "gemma4")
 
 app = FastAPI(title="LLM Router Phase 5", version="5.3")
 
