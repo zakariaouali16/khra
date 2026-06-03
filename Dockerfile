@@ -1,7 +1,7 @@
 # Single container: Ollama runtime + gemma4 (baked in) + the FastAPI router.
 # Baking the model into the image means Cloud Run cold starts load weights from
 # the local disk instead of re-downloading ~4.7 GB every time an instance spins up.
-FROM ollama/ollama:latest
+FROM ollama/ollama:0.20.0
 
 # The ollama image is Ubuntu-based; add Python + curl.
 RUN apt-get update && \
@@ -28,7 +28,8 @@ RUN chmod +x start.sh
 ENV OLLAMA_URL=http://localhost:11434/api/generate \
     MODEL_NAME=gemma4 \
     TAXONOMY_PATH=/app/taxonomy_phase5.json \
-    PORT=8080
+    PORT=8080 \
+    OLLAMA_FLASH_ATTENTION=0
 
 # The base image's entrypoint is `ollama`; clear it so our script runs.
 ENTRYPOINT []
